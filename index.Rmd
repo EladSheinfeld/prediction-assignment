@@ -1,9 +1,95 @@
 ---
-title: "index"
+title: "Practical Machine Learning - Peer Prediction Assignment"
 author: "Elad Sheinfeld"
 date: "June 17, 2016"
 output: html_document
 ---
 
+## Synopsis
+This project aims to predict the manner in which excercises were done. The given data was recorder from accelerometers on the belt, forearm, arm, and dumbell of 6 participants.  
 
-just testing the page thingy, carry on.
+## Data Processing
+### Load Required Packages
+```{r, results='hide', warning=FALSE, message=FALSE}
+library(caret)
+library(rattle)
+library(rpart.plot)
+library(randomForest)
+set.seed(130986)
+```
+
+### Download Source Data
+```{r}
+trainingSourceUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+trainingFile <- ".\\data\\pml-training.csv"
+
+if (!file.exists(trainingFile)){
+  download.file(trainingSourceUrl, destfile = trainingFile)
+}
+
+testingSourceUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+testingFile <- ".\\data\\pml-testing.csv"
+
+if (!file.exists(testingFile)){
+  download.file(testingSourceUrl, destfile = testingFile)
+}
+```
+
+### Load Training and Testing data
+```{r}
+training_orig <- read.csv(trainingFile, na.strings = c("", "NA", "NULL"))
+testing_orig <- read.csv(testingFile, na.strings = c("", "NA", "NULL"))
+```
+## Data Analysis 
+### Clean Data
+The dataframes has `r ncol(training_orig)` columns, most of which are unneeded for the classification and prediction process.
+We will remove columns with no data in them and also columns that will introduce noise to the prediction such as name and time.
+
+```{r}
+dim(training_orig)
+training_orig <- training_orig[, colSums(is.na(training_orig)) == 0]
+training_orig <- training_orig[, -c(1:7)]
+dim(training_orig)
+
+dim(testing_orig)
+testing_orig <- testing_orig[, colSums(is.na(testing_orig)) == 0]
+testing_orig <- testing_orig[, -c(1:7)]
+dim(testing_orig)
+```
+
+
+### Partition The Training Data
+
+```{r}
+inTrain=createDataPartition(y = training_orig$classe, p = 0.7, list = FALSE)
+training <-training_orig[inTrain,]
+testing <- training_orig[-inTrain,]
+```
+
+### Build A Prediction Model Using Decision Trees 
+```{r}
+# Set seed for repreducability
+rpart_model_fit <- train(classe ~ ., method = 'rpart', data = training)
+rpart_prediction <- predict(rpart_model_fit,newdata=testing)
+rpart_conf_matrix <- confusionMatrix(rpart_prediction,testing$classe)
+rpart_conf_matrix$table
+```
+From the table above it is clear that the prediction accuracy of the decision trees model is relatively low. And indeed the overall model accuracy is **`r paste(round(rpart_conf_matrix$overall["Accuracy"], 3) * 100, '%', sep = '')`**.
+
+### Build A Prediction Model Using Random Forest
+```{r}
+rf_model_fit <- randomForest(classe ~ ., method = 'class', data = training)
+rf_prediction = predict(rf_model_fit, testing, type='class')
+rf_conf_matrix <- confusionMatrix(rf_prediction, testing$classe)
+rf_conf_matrix$ table
+```
+
+It is clear that the random forest prediction accuracy is significantly better than the accuracy of the decision trees model. The prediction accuracy of the random forest model is **`r paste(round(rf_conf_matrix$overall["Accuracy"], 3) * 100, '%', sep = '')`**.
+
+### Conclusions 
+Using the random forest model inlustrated above, we can predict the testinge data as follows:
+```{r}
+final_prediction <- predict(rf_model_fit, testing_orig, type='class')
+
+final_prediction
+```
